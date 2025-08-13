@@ -1,13 +1,14 @@
 const express = require("express");
 const cors = require("cors");
-const serverless = require('serverless-http');
+
 
 require('dotenv').config();
 const app = express();
 app.use(cors({
-  origin:"*",
-  methods:["GET","POST"]
+  origin: "http://localhost:5173",
+  methods: ["GET", "POST"]
 }));
+
 app.use(express.json());
 const multer = require("multer");
 const path = require("path");
@@ -63,8 +64,7 @@ app.post("/generate", upload.single("file"), async (req, res) => {
       // Clean up uploaded file
       fs.unlinkSync(filePath);
     }
-app.use('/.netlify/functions/server', router);
-module.exports.handler = serverless(app);
+
 
     // Gemini request
     const requestParts = filePart
