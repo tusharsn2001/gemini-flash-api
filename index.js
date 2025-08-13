@@ -3,14 +3,15 @@ const cors = require("cors");
 const serverless = require('serverless-http');
 
 require('dotenv').config();
+const app = express();
+app.use(cors());
+app.use(express.json());
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
-const app = express();
-app.use(cors());
-app.use(express.json());
+
 
 // Multer config
 const upload = multer({ dest: "uploads/" });
