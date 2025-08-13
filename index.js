@@ -4,7 +4,10 @@ const serverless = require('serverless-http');
 
 require('dotenv').config();
 const app = express();
-app.use(cors());
+app.use(cors({
+  origin:"*",
+  methods:["GET","POST"]
+}));
 app.use(express.json());
 const multer = require("multer");
 const path = require("path");
