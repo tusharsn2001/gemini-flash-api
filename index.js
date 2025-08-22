@@ -21,7 +21,7 @@ const upload = multer({
 
 // Initialize Gemini API
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
-const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
 
 // Enable JSON parsing for POST requests
 app.use(express.json());
@@ -51,6 +51,7 @@ app.post('/api/generate-questions', (req, res) => {
       const filePath = req.file.path;
       const fileBuffer = await fs.readFile(filePath);
       const fileSize = fileBuffer.length;
+      console.log(`Processing file: ${req.file.originalname}, Size: ${fileSize} bytes`);
 
       // Prepare the prompt for Gemini API
       const prompt = `
@@ -72,6 +73,7 @@ app.post('/api/generate-questions', (req, res) => {
 
       if (fileSize <= 20 * 1024 * 1024) {
         // Inline data for files <= 20MB
+        console.log('Using inline data for PDF');
         const base64Data = fileBuffer.toString('base64');
         const contents = [
           { text: prompt },
@@ -85,14 +87,16 @@ app.post('/api/generate-questions', (req, res) => {
 
         const result = await model.generateContent(contents);
         const generatedText = result.response.text();
+        console.log('Gemini API response:', generatedText);
 
         try {
           questions = JSON.parse(generatedText).questions;
         } catch (error) {
-          throw new Error('Failed to parse Gemini API response as JSON');
+          throw new Error('Failed to parse Gemini API response as JSON: ' + error.message);
         }
       } else {
         // File API for files > 20MB
+        console.log('Using File API for PDF');
         const file = await genAI.fileManager.uploadFile(filePath, {
           mimeType: 'application/pdf',
           displayName: req.file.originalname || 'uploaded.pdf',
@@ -100,9 +104,11 @@ app.post('/api/generate-questions', (req, res) => {
 
         // Wait for file processing
         let fileStatus = await genAI.fileManager.getFile(file.file.name);
+        console.log(`Initial file status: ${fileStatus.state}`);
         while (fileStatus.state === 'PROCESSING') {
           await new Promise(resolve => setTimeout(resolve, 5000));
           fileStatus = await genAI.fileManager.getFile(file.file.name);
+          console.log(`Current file status: ${fileStatus.state}`);
         }
         if (fileStatus.state === 'FAILED') {
           throw new Error('File processing failed');
@@ -120,11 +126,12 @@ app.post('/api/generate-questions', (req, res) => {
 
         const result = await model.generateContent(contents);
         const generatedText = result.response.text();
+        console.log('Gemini API response (File API):', generatedText);
 
         try {
           questions = JSON.parse(generatedText).questions;
         } catch (error) {
-          throw new Error('Failed to parse Gemini API response as JSON');
+          throw new Error('Failed to parse Gemini API response as JSON: ' + error.message);
         }
       }
 
