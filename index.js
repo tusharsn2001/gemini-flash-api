@@ -10,6 +10,9 @@ dotenv.config();
 const app = express();
 const port = process.env.PORT || 3000;
 
+// Log API key presence (obscured for security)
+console.log('GEMINI_API_KEY loaded:', !!process.env.GEMINI_API_KEY);
+
 // Enable CORS for frontend requests
 app.use(cors());
 
@@ -29,14 +32,25 @@ app.use(express.json());
 // Middleware to handle multer errors
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
-    console.error('Multer error:', err.message);
+    console.error('Multer error:', err.message, 'Field:', err.field);
     return res.status(400).json({ error: `Multer error: ${err.message}` });
   }
   next();
 });
 
+// Function to clean markdown from response
+const cleanMarkdown = (text) => {
+  // Remove ```json and ``` code fences
+  return text
+    .replace(/```json\n?/, '') // Remove opening ```json
+    .replace(/```\n?/, '')     // Remove closing ```
+    .trim();                   // Remove leading/trailing whitespace
+};
+
 // Endpoint to handle PDF upload and question generation
 app.post('/api/generate-questions', (req, res) => {
+  console.log('Request headers:', req.headers);
+  console.log('Request body fields:', req.body);
   upload(req, res, async (err) => {
     if (err) {
       console.error('Upload error:', err.message);
@@ -45,8 +59,16 @@ app.post('/api/generate-questions', (req, res) => {
 
     try {
       if (!req.file) {
+        console.error('No file received in request');
         return res.status(400).json({ error: 'No file uploaded' });
       }
+
+      console.log('File received:', {
+        originalname: req.file.originalname,
+        size: req.file.size,
+        path: req.file.path,
+        fieldname: req.file.fieldname,
+      });
 
       const filePath = req.file.path;
       const fileBuffer = await fs.readFile(filePath);
@@ -56,7 +78,8 @@ app.post('/api/generate-questions', (req, res) => {
       // Prepare the prompt for Gemini API
       const prompt = `
         Analyze the provided document and generate 5 multiple-choice questions, each with 4 options and an index value (0-3) for the correct answer.
-        Return the response in JSON format with the following structure:
+        Return the response as plain JSON without markdown or code fences 
+        The JSON structure must be:
         {
           "questions": [
             {
@@ -87,11 +110,15 @@ app.post('/api/generate-questions', (req, res) => {
 
         const result = await model.generateContent(contents);
         const generatedText = result.response.text();
-        console.log('Gemini API response:', generatedText);
+        console.log('Raw Gemini API response:', generatedText);
 
         try {
-          questions = JSON.parse(generatedText).questions;
+          // Clean markdown before parsing
+          const cleanedText = cleanMarkdown(generatedText);
+          console.log('Cleaned response:', cleanedText);
+          questions = JSON.parse(cleanedText).questions;
         } catch (error) {
+          console.error('JSON parse error:', error.message);
           throw new Error('Failed to parse Gemini API response as JSON: ' + error.message);
         }
       } else {
@@ -126,11 +153,15 @@ app.post('/api/generate-questions', (req, res) => {
 
         const result = await model.generateContent(contents);
         const generatedText = result.response.text();
-        console.log('Gemini API response (File API):', generatedText);
+        console.log('Raw Gemini API response (File API):', generatedText);
 
         try {
-          questions = JSON.parse(generatedText).questions;
+          // Clean markdown before parsing
+          const cleanedText = cleanMarkdown(generatedText);
+          console.log('Cleaned response (File API):', cleanedText);
+          questions = JSON.parse(cleanedText).questions;
         } catch (error) {
+          console.error('JSON parse error:', error.message);
           throw new Error('Failed to parse Gemini API response as JSON: ' + error.message);
         }
       }
